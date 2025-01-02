@@ -7,32 +7,48 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestNewError(t *testing.T) {
-	// Configurar Gin en modo test
-	gin.SetMode(gin.TestMode)
+	r := gin.Default()
 
-	// Crear un contexto de prueba
+	r.GET("/test-error", func(c *gin.Context) {
+		NewError(c, 400, "Bad Request")
+	})
+
+	req, _ := http.NewRequest(http.MethodGet, "/test-error", nil)
+
 	w := httptest.NewRecorder()
-	ctx, _ := gin.CreateTestContext(w)
 
-	// Ejecutar la función bajo prueba
-	status := http.StatusBadRequest
-	errMessage := "Invalid input"
-	NewError(ctx, status, errMessage)
+	r.ServeHTTP(w, req)
 
-	// Validar el código de estado
-	assert.Equal(t, status, w.Code)
-
-	// Validar el cuerpo de la respuesta
-	expectedResponse := Error{
-		Status: status,
-		Err:    errMessage,
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("Expected status code %d, got %d", http.StatusBadRequest, w.Code)
 	}
-	var actualResponse Error
-	err := json.Unmarshal(w.Body.Bytes(), &actualResponse)
-	assert.NoError(t, err) // Asegurarse de que el JSON se decodifica sin errores
-	assert.Equal(t, expectedResponse, actualResponse)
+
+	var body map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("Failed to unmarshal response body: %v", err)
+	}
+
+	if body["status"].(float64) != 400 {
+		t.Errorf("Expected status 400, got %v", body["status"])
+	}
+
+	if body["error"].(string) != "Bad Request" {
+		t.Errorf("Expected error 'Bad Request', got %v", body["error"])
+	}
+}
+
+func TestErrorMethod(t *testing.T) {
+	err := "Test error"
+	errorStruct := &Error{
+		Status: 500,
+		Err:    err,
+	}
+
+	expectedError := "Status: 500, Error: Test error"
+	if errorStruct.Error() != expectedError {
+		t.Errorf("Expected error: %s, but got: %s", expectedError, errorStruct.Error())
+	}
 }
